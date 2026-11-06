@@ -1,0 +1,31 @@
+{
+  "orders": [
+    {
+      "id": "SO-1001",
+      "total": 420.5,
+      "customer": {
+        "name": "Karim Haddad",
+        "phone": "50000002",
+        "email": "karim@example.qa"
+      }
+    },
+    {
+      "id": "SO-1002",
+      "total": 99,
+      "customer": {
+        "name": "مايا سانتوس",
+        "contact": {
+          "mobile": "97460000005"
+        }
+      }
+    },
+    {
+      "id": "SO-1003",
+      "total": 12,
+      "customer": {
+        "name": "Guest",
+        "email": "guest@example.com"
+      }
+    }
+  ]
+}

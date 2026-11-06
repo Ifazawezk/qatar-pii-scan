@@ -1,0 +1,8 @@
+2026-03-02 08:14:03 INFO  api  GET /health 200 3ms
+2026-03-02 08:15:41 INFO  auth login ok user=noor@example.qa ip=10.0.4.12
+2026-03-02 08:16:09 WARN  sms  delivery slow to +974 5000 0001 (retry 1)
+2026-03-02 09:02:55 INFO  kyc  passport no: AB3400003 verified for Mr. Arjun Menon
+2026-03-02 09:03:10 INFO  kyc  تم التحقق من هوية السيد كريم حداد
+2026-03-02 09:05:00 DEBUG pay  refund to QA70 FAKE 0000 0000 0000 0000 0000 4 queued
+2026-03-02 09:06:12 DEBUG test fixture fixture@example.qa  # qpii:ignore
+2026-03-02 09:07:30 INFO  jobs nightly export finished rows=50001234
