@@ -8,12 +8,14 @@ from typing import Iterable
 
 from .detectors import KINDS, LEVELS, detect
 from .mask import mask
+from .rules import INLINE_IGNORE, Allowlist, is_ignored
 from .sources import MAX_BYTES, file_kind, is_binary, pieces_for
 
 SKIP_DIRS = {".git", ".hg", ".svn", "node_modules", ".venv", "venv", "__pycache__", ".pytest_cache",
              ".mypy_cache", "dist", "build", ".tox", ".idea", ".vscode"}
 SKIP_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".pdf", ".zip", ".gz", ".exe", ".dll", ".so", ".pyc",
                  ".woff", ".woff2", ".ico", ".mp3", ".mp4", ".parquet", ".xls"}
+SKIP_NAMES = {".qpii-allow", ".qpiiignore"}  # the allowlist is meant to hold known values
 
 
 @dataclass
@@ -60,12 +62,16 @@ def display_path(path: Path) -> str:
         return path.resolve().as_posix()
 
 
-def scan_file(path: Path, shown: str, min_confidence: str = "low") -> list[Finding]:
+def scan_file(path: Path, shown: str, min_confidence: str = "low", allow: Allowlist | None = None) -> list[Finding]:
     floor = LEVELS[min_confidence]
     findings = []
     for piece in pieces_for(path):
+        if INLINE_IGNORE in piece.text:
+            continue
         for m in detect(piece.text, piece.field):
             if LEVELS[m.confidence] < floor:
+                continue
+            if allow and allow.allows(m.kind, m.value, shown):
                 continue
             column = piece.column + m.start if piece.column else None
             end = piece.column + m.end if piece.column else None
@@ -89,11 +95,12 @@ def iter_files(paths: Iterable[Path]) -> Iterable[Path]:
                 yield Path(dirpath) / name
 
 
-def scan(paths: Iterable[str | Path], min_confidence: str = "low") -> Report:
+def scan(paths: Iterable[str | Path], min_confidence: str = "low", ignore: list[str] | None = None,
+         allow: Allowlist | None = None) -> Report:
     report = Report()
     for file in iter_files(Path(p) for p in paths):
         shown = display_path(file)
-        if file.suffix.lower() in SKIP_SUFFIXES:
+        if file.suffix.lower() in SKIP_SUFFIXES or file.name in SKIP_NAMES or (ignore and is_ignored(shown, ignore)):
             continue
         if file.stat().st_size > MAX_BYTES:
             report.skipped.append((shown, "larger than 20 MB"))
@@ -102,7 +109,7 @@ def scan(paths: Iterable[str | Path], min_confidence: str = "low") -> Report:
             report.skipped.append((shown, "binary"))
             continue
         try:
-            found = scan_file(file, shown, min_confidence)
+            found = scan_file(file, shown, min_confidence, allow)
         except Exception as exc:  # a broken file should not stop the scan
             report.skipped.append((shown, f"could not read: {exc.__class__.__name__}"))
             continue
