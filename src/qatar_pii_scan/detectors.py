@@ -19,6 +19,8 @@ import re
 from dataclasses import dataclass
 from typing import Callable
 
+from . import iban
+
 LEVELS = {"low": 1, "medium": 2, "high": 3}
 KINDS = {
     "iban": "Qatar IBAN",
@@ -133,8 +135,25 @@ def find_phones(text: str, folded: str, context: str) -> list[Match]:
     return out
 
 
+IBAN_TEXT = re.compile(r"(?<![A-Za-z0-9])QA\d{2}(?: ?[A-Za-z0-9]){25}(?![A-Za-z0-9])", re.I)
+
+
+def find_ibans(text: str, folded: str, context: str) -> list[Match]:
+    out = []
+    for m in IBAN_TEXT.finditer(folded):
+        value = text[m.start():m.end()]
+        candidate = iban.compact(m.group())
+        if not iban.QA_IBAN.fullmatch(candidate):
+            continue
+        if iban.mod97(candidate) == 1:
+            out.append(Match("iban", m.start(), m.end(), value, "high", "Qatar IBAN, check digits valid"))
+        else:
+            out.append(Match("iban", m.start(), m.end(), value, "low", "Qatar IBAN shape, check digits do not match"))
+    return out
+
+
 Detector = Callable[[str, str, str], list[Match]]
-DETECTORS: list[Detector] = [find_emails, find_qids, find_phones]
+DETECTORS: list[Detector] = [find_ibans, find_emails, find_qids, find_phones]
 
 
 def detect(text: str, field: str = "") -> list[Match]:
