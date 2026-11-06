@@ -7,7 +7,7 @@ from pathlib import Path
 
 from . import __version__
 from .detectors import LEVELS
-from .report import NOTE, summary, to_json, to_text
+from .report import NOTE, summary, to_html, to_json, to_sarif, to_text
 from .rules import Allowlist, load_ignore, value_hash
 from .scanner import scan
 
@@ -36,8 +36,10 @@ def cmd_scan(args) -> int:
         ignore=load_ignore(ignore_file) if ignore_file else None,
         allow=Allowlist.load(allow_file) if allow_file else None,
     )
-    renderers = {"text": to_text, "json": to_json}
+    renderers = {"text": to_text, "json": to_json, "sarif": to_sarif}
     write(renderers[args.format](report), args.output)
+    if args.html:
+        Path(args.html).write_text(to_html(report), encoding="utf-8")
     if args.output:
         print(summary(report))
     if args.fail_on == "never":
@@ -58,7 +60,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("scan", help="scan files and folders")
     s.add_argument("paths", nargs="*", help="files or folders (default: current folder)")
-    s.add_argument("--format", choices=["text", "json"], default="text")
+    s.add_argument("--format", choices=["text", "json", "sarif"], default="text")
+    s.add_argument("--html", help="also write an HTML summary per file")
     s.add_argument("-o", "--output", help="write the report to a file instead of the screen")
     s.add_argument("--min-confidence", choices=CONFIDENCE, default="low", help="hide findings below this level")
     s.add_argument("--fail-on", choices=CONFIDENCE + ["never"], default="medium",
