@@ -40,3 +40,8 @@ def test_names_in_free_text():
 def test_name_assignment_needs_two_words():
     assert found("name = Admin") == []
     assert found("class Name:") == []
+
+
+def test_placeholder_names_are_skipped():
+    assert found("Guest", field="name") == []
+    assert found("زائر", field="الاسم") == []

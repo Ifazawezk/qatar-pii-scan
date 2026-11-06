@@ -184,8 +184,12 @@ def is_name_field(field: str) -> bool:
     return bool(NAME_FIELD.search(f)) and not NOT_PERSON.search(f)
 
 
+PLACEHOLDERS = {"guest", "admin", "test", "user", "unknown", "none", "null", "anonymous", "customer", "system",
+                "زائر", "ضيف", "مستخدم", "غير معروف"}
+
+
 def find_names(text: str, folded: str, context: str, field: str = "") -> list[Match]:
-    if field and is_name_field(field) and NAME_VALUE.match(text):
+    if field and is_name_field(field) and NAME_VALUE.match(text) and text.strip().lower() not in PLACEHOLDERS:
         s = len(text) - len(text.lstrip())
         return [Match("name", s, len(text.rstrip()), text.strip(), "low", "value in a name field")]
     out = []
