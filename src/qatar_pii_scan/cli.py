@@ -7,6 +7,7 @@ from pathlib import Path
 
 from . import __version__
 from .detectors import LEVELS
+from .redact import redact
 from .report import NOTE, summary, to_html, to_json, to_sarif, to_text
 from .rules import Allowlist, load_ignore, value_hash
 from .scanner import scan
@@ -48,6 +49,13 @@ def cmd_scan(args) -> int:
     return 1 if any(LEVELS[f.confidence] >= floor for f in report.findings) else 0
 
 
+def cmd_redact(args) -> int:
+    allow_file = _default(args.allowlist, ".qpii-allow")
+    count = redact(args.input, args.output, args.min_confidence, Allowlist.load(allow_file) if allow_file else None)
+    print(f"masked {count} values, wrote {args.output}")
+    return 0
+
+
 def cmd_hash(args) -> int:
     print(f"sha256:{value_hash(args.value)}")
     return 0
@@ -69,6 +77,12 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--ignore-file", help="path patterns to skip (default: .qpiiignore if present)")
     s.add_argument("--allowlist", help="known values to accept (default: .qpii-allow if present)")
 
+    r = sub.add_parser("redact", help="write a masked copy of a CSV, Excel or JSON file")
+    r.add_argument("input")
+    r.add_argument("-o", "--output", required=True)
+    r.add_argument("--min-confidence", choices=CONFIDENCE, default="low", help="leave findings below this level")
+    r.add_argument("--allowlist", help="known values to keep (default: .qpii-allow if present)")
+
     h = sub.add_parser("hash", help="print the allowlist hash of a value")
     h.add_argument("value")
     return p
@@ -81,7 +95,7 @@ def main(argv: list[str] | None = None) -> int:
         except (AttributeError, ValueError):
             pass
     args = build_parser().parse_args(argv)
-    commands = {"scan": cmd_scan, "hash": cmd_hash}
+    commands = {"scan": cmd_scan, "redact": cmd_redact, "hash": cmd_hash}
     try:
         return commands[args.command](args)
     except (OSError, ValueError) as exc:
