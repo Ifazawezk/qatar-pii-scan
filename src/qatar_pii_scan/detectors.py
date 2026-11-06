@@ -152,8 +152,54 @@ def find_ibans(text: str, folded: str, context: str) -> list[Match]:
     return out
 
 
+PASSPORT_WORDS = ("passport", "passport no", "جواز", "جواز السفر", "رقم الجواز")
+PASSPORT = re.compile(r"(?<![A-Za-z0-9])(?:[A-Za-z]{1,2}\d{6,8}|\d{8,9})(?![A-Za-z0-9])")
+
+
+def find_passports(text: str, folded: str, context: str) -> list[Match]:
+    """Only with a passport keyword in the line or field name. Formats differ by country."""
+    if not has_keyword(context, PASSPORT_WORDS):
+        return []
+    return [Match("passport", m.start(), m.end(), text[m.start():m.end()], "medium", "passport keyword nearby")
+            for m in PASSPORT.finditer(folded)]
+
+
+# Names are a guess. Everything below is low confidence.
+NAME_FIELD = re.compile(r"(?<![a-z])(name|full name|first name|last name|surname|customer|employee|contact person"
+                        r"|الاسم|اسم)(?![a-z])")
+NOT_PERSON = re.compile(r"(?<![a-z])(file|host|user|product|company|sheet|table|column|field|bucket|domain|server"
+                        r"|app|project|event|class|module|package|branch|tag|org|shop|store|brand|item|service"
+                        r"|queue|topic|image|repo|path|type|db|database|schema|model|display|key|bank)(?![a-z])")
+LATIN_WORD = r"[A-Z][a-z]+(?:[-'][A-Z]?[a-z]+)*"
+ARABIC_WORD = r"[\u0621-\u064A]{2,}"
+NAME_VALUE = re.compile(rf"^\s*(?:{LATIN_WORD}(?:\s+{LATIN_WORD}){{0,4}}|{ARABIC_WORD}(?:\s+{ARABIC_WORD}){{0,5}})\s*$")
+HONORIFIC_EN = re.compile(rf"\b(?:Mr|Mrs|Ms|Miss|Dr|Eng)\.?\s+({LATIN_WORD}(?:\s+{LATIN_WORD}){{0,3}})")
+HONORIFIC_AR = re.compile(rf"(?:السيد|السيدة|الأستاذ|الأستاذة|الدكتور|الدكتورة|المهندس|المهندسة)\s+({ARABIC_WORD}(?:\s+{ARABIC_WORD}){{0,3}})")
+NAME_ASSIGN = re.compile(rf"""(?i:\b(?:full_?name|first_?name|last_?name|customer_?name|name))["']?\s*[:=]\s*["']?({LATIN_WORD}(?:\s+{LATIN_WORD}){{1,3}})""")
+ARABIC_NASAB = re.compile(rf"{ARABIC_WORD}\s+(?:بن|بنت)\s+{ARABIC_WORD}(?:\s+{ARABIC_WORD})?")
+
+
+def is_name_field(field: str) -> bool:
+    f = normalize(field)
+    return bool(NAME_FIELD.search(f)) and not NOT_PERSON.search(f)
+
+
+def find_names(text: str, folded: str, context: str, field: str = "") -> list[Match]:
+    if field and is_name_field(field) and NAME_VALUE.match(text):
+        s = len(text) - len(text.lstrip())
+        return [Match("name", s, len(text.rstrip()), text.strip(), "low", "value in a name field")]
+    out = []
+    for pattern, reason in ((HONORIFIC_EN, "title before a name"), (HONORIFIC_AR, "title before a name"),
+                            (NAME_ASSIGN, "assigned to a name variable")):
+        for m in pattern.finditer(text):
+            out.append(Match("name", m.start(1), m.end(1), m.group(1), "low", reason))
+    for m in ARABIC_NASAB.finditer(text):
+        out.append(Match("name", m.start(), m.end(), m.group(), "low", "Arabic name with bin or bint"))
+    return out
+
+
 Detector = Callable[[str, str, str], list[Match]]
-DETECTORS: list[Detector] = [find_ibans, find_emails, find_qids, find_phones]
+DETECTORS: list[Detector] = [find_ibans, find_emails, find_qids, find_phones, find_passports]
 
 
 def detect(text: str, field: str = "") -> list[Match]:
@@ -163,8 +209,9 @@ def detect(text: str, field: str = "") -> list[Match]:
     folded = fold_digits(text)
     context = normalize(f"{field} {text}")
     taken: list[Match] = []
-    for detector in DETECTORS:
-        for m in sorted(detector(text, folded, context), key=lambda m: -LEVELS[m.confidence]):
+    runs = [d(text, folded, context) for d in DETECTORS] + [find_names(text, folded, context, field)]
+    for found in runs:
+        for m in sorted(found, key=lambda m: -LEVELS[m.confidence]):
             if all(m.end <= t.start or m.start >= t.end for t in taken):
                 taken.append(m)
     return sorted(taken, key=lambda m: m.start)
